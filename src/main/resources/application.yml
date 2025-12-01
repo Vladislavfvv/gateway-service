@@ -1,0 +1,22 @@
+# Маршрутизация для Spring Cloud Gateway
+spring:
+  cloud:
+    gateway:
+      routes:
+        # Маршрут для authentication-service
+        - id: auth_route
+          uri: ${services.auth.url}
+          predicates:
+            - Path=/auth/**
+
+        # Маршрут для user-service
+        - id: user_route
+          uri: ${services.user.url}
+          predicates:
+            - Path=/api/v1/users/**
+
+        # Маршрут для order-service
+        - id: order_route
+          uri: ${services.order.url}
+          predicates:
+            - Path=/api/v1/orders/**

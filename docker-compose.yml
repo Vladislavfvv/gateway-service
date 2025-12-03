@@ -1,58 +1,191 @@
 version: "3.8"
 services:
-
+  # База данных для authentication-service
   postgres-auth:
     image: postgres:16
+    container_name: postgres-auth
+    restart: always
     environment:
       POSTGRES_DB: auth_db
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
-    ports: ["5433:5432"]
-    volumes: ["auth_db:/var/lib/postgresql/data"]
+    ports:
+      - "5433:5432"
+    volumes:
+      - auth_db_data:/var/lib/postgresql/data
+    networks:
+      - backend-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d auth_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
 
+  # База данных для user-service
   postgres-user:
     image: postgres:16
+    container_name: postgres-user
+    restart: always
     environment:
-      POSTGRES_DB: user_db
+      POSTGRES_DB: us_db
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
-    ports: ["5434:5432"]
-    volumes: ["user_db:/var/lib/postgresql/data"]
+    ports:
+      - "5432:5432"
+    volumes:
+      - us_db_data:/var/lib/postgresql/data
+    networks:
+      - backend-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d us_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
 
+  # База данных для order-service
+  postgres-order:
+    image: postgres:16
+    container_name: postgres-order
+    restart: always
+    environment:
+      POSTGRES_DB: os_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5434:5432"
+    volumes:
+      - os_db_data:/var/lib/postgresql/data
+    networks:
+      - backend-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d os_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  # Redis для кеширования
   redis:
     image: redis:7
-    ports: ["6379:6379"]
+    container_name: redis
+    restart: always
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - backend-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
+  # Authentication Service
   authentication-service:
     build:
-      context: ./authentication-service
+      context: ../auth-service/authentication-service
+    container_name: authentication-service
+    restart: always
     environment:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-auth:5432/auth_db
       SPRING_DATASOURCE_USERNAME: postgres
       SPRING_DATASOURCE_PASSWORD: postgres
+      SPRING_PROFILES_ACTIVE: docker
+    ports:
+      - "8081:8081"
+    networks:
+      - backend-network
     depends_on:
-      - postgres-auth
+      postgres-auth:
+        condition: service_healthy
 
+  # User Service
   user-service:
     build:
-      context: ./user-service
+      context: ../user-service/userService
+    container_name: user-service
+    restart: always
     environment:
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-user:5432/user_db
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-user:5432/us_db
       SPRING_DATASOURCE_USERNAME: postgres
       SPRING_DATASOURCE_PASSWORD: postgres
+      SPRING_REDIS_HOST: redis
+      SPRING_REDIS_PORT: 6379
+      SPRING_PROFILES_ACTIVE: docker
+      AUTHENTICATION_SERVICE_BASE_URL: http://authentication-service:8081
+      AUTHENTICATION_SERVICE_INTERNAL_API_KEY: dev-internal-api-key
+    ports:
+      - "8082:8080"
+    networks:
+      - backend-network
     depends_on:
-      - postgres-user
+      postgres-user:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
 
+  # Order Service
+  order-service:
+    build:
+      context: ../order-service/order-service
+    container_name: order-service
+    restart: always
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-order:5432/os_db
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: postgres
+      SPRING_PROFILES_ACTIVE: docker
+      USER_SERVICE_URL: http://user-service:8080
+    ports:
+      - "8083:8080"
+    networks:
+      - backend-network
+    depends_on:
+      postgres-order:
+        condition: service_healthy
+      user-service:
+        condition: service_started
+
+  # API Gateway
   api-gateway:
     build:
-      context: ./api-gateway
+      context: .
+    container_name: api-gateway
+    restart: always
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      # URL-адреса микросервисов (переопределяют значения из application.properties)
+      SERVICES_AUTH_URL: http://authentication-service:8081
+      SERVICES_USER_URL: http://user-service:8080
+      SERVICES_ORDER_URL: http://order-service:8083
+      # JWT секретный ключ (должен совпадать с authentication-service)
+      JWT_SECRET: mySecretKeyForJWTGenerationInAuthenticationService2025
+      # Внутренний API ключ для rollback
+      INTERNAL_API_KEY: dev-internal-api-key
     ports:
-      - "8080:8080"
+      - "8084:8084"
+    networks:
+      - backend-network
     depends_on:
-      - authentication-service
-      - user-service
-      - redis
+      authentication-service:
+        condition: service_started
+      user-service:
+        condition: service_started
+      order-service:
+        condition: service_started
+      redis:
+        condition: service_healthy
 
 volumes:
-  auth_db:
-  user_db:
+  auth_db_data:
+  us_db_data:
+  os_db_data:
+  redis_data:
+
+networks:
+  backend-network:
+    name: backend-network
+    driver: bridge

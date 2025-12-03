@@ -36,10 +36,8 @@ public class SecurityConfig {
                         // Разрешаем доступ без JWT токена только для login и register
                         // Пути для проксирования к authentication-service
                         .pathMatchers("/auth/v1/login", "/auth/v1/register").permitAll()
-                        // Путь для регистрации credentials (GatewayRegistrationController)
-                        .pathMatchers("/auth/register").permitAll()
                         // Путь для создания профиля пользователя (требует JWT токен)
-                        .pathMatchers("/auth/createUser").authenticated()
+                        .pathMatchers("/auth/v1/createUser").authenticated()
                         // Все остальные запросы требуют аутентификации (JWT токен)
                         .anyExchange().authenticated()
                 )

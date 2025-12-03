@@ -6,7 +6,7 @@ import lombok.Data;
 /**
  * DTO для регистрации пользователя в Authentication Service.
  * Содержит только credentials (login, password, role).
- * Профиль пользователя создаётся отдельно через /auth/createUser.
+ * Профиль пользователя создаётся отдельно через /auth/v1/createUser.
  */
 @Data
 public class RegisterRequest {

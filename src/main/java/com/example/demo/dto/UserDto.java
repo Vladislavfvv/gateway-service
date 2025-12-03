@@ -1,7 +1,7 @@
 package com.example.demo.dto;
 
 import lombok.Data;
-/* UserDto - класс, который используется для представления пользователя */
+/*  DTO для создания пользователя в user-service */
 @Data
 public class UserDto {
     private Long id;

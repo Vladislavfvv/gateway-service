@@ -85,8 +85,11 @@ services:
   # Authentication Service
   authentication-service:
     image: ghcr.io/vladislavfvv/authentication-service:latest
+    build:
+      context: ../../auth-service/authentication-service
+      dockerfile: Dockerfile
     container_name: authentication-service
-    pull_policy: always
+    pull_policy: if_not_present
     restart: always
     environment:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-auth:5432/auth_db
@@ -104,8 +107,11 @@ services:
   # User Service
   user-service:
     image: ghcr.io/vladislavfvv/userservice/user_service:latest
+    build:
+      context: ../../user-service/userService
+      dockerfile: Dockerfile
     container_name: user-service
-    pull_policy: always
+    pull_policy: if_not_present
     restart: always
     environment:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-user:5432/us_db
@@ -129,8 +135,11 @@ services:
   # Order Service
   order-service:
     image: ghcr.io/vladislavfvv/order-service:latest
+    build:
+      context: ../../order-service/order-service
+      dockerfile: Dockerfile
     container_name: order-service
-    pull_policy: always
+    pull_policy: if_not_present
     restart: always
     environment:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-order:5432/os_db
@@ -151,8 +160,11 @@ services:
   # API Gateway
   api-gateway:
     image: ghcr.io/vladislavfvv/api-gateway:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
     container_name: api-gateway
-    pull_policy: always
+    pull_policy: if_not_present
     restart: always
     environment:
       SPRING_PROFILES_ACTIVE: docker

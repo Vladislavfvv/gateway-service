@@ -34,12 +34,10 @@ public class SecurityConfig {
                 .csrf(csrf -> csrf.disable())
                 .authorizeExchange(ex -> ex
                         // Публичные эндпоинты Actuator - доступны без аутентификации для мониторинга
-                        .pathMatchers("/actuator/health", "/actuator/info").permitAll()
-                        // Разрешаем доступ без JWT токена только для login и register
+                        .pathMatchers("/actuator/**").permitAll()
+                        // Разрешаем доступ без JWT токена для всех путей /auth/** (включая /auth/v1/login, /auth/v1/register и т.д.)
                         // Пути для проксирования к authentication-service
-                        .pathMatchers("/auth/v1/login", "/auth/v1/register").permitAll()
-                        // Путь для создания профиля пользователя (требует JWT токен)
-                        .pathMatchers("/auth/v1/createUser").authenticated()
+                        .pathMatchers("/auth/**").permitAll()
                         // Все остальные запросы требуют аутентификации (JWT токен)
                         .anyExchange().authenticated()
                 )

@@ -1,4 +1,3 @@
-version: "3.8"
 services:
   # База данных для authentication-service
   postgres-auth:
@@ -85,9 +84,9 @@ services:
 
   # Authentication Service
   authentication-service:
-    build:
-      context: ../auth-service/authentication-service
+    image: ghcr.io/vladislavfvv/authentication-service:latest
     container_name: authentication-service
+    pull_policy: always
     restart: always
     environment:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-auth:5432/auth_db
@@ -104,9 +103,9 @@ services:
 
   # User Service
   user-service:
-    build:
-      context: ../user-service/userService
+    image: ghcr.io/vladislavfvv/userservice/user_service:latest
     container_name: user-service
+    pull_policy: always
     restart: always
     environment:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-user:5432/us_db
@@ -129,9 +128,9 @@ services:
 
   # Order Service
   order-service:
-    build:
-      context: ../order-service/order-service
+    image: ghcr.io/vladislavfvv/order-service:latest
     container_name: order-service
+    pull_policy: always
     restart: always
     environment:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-order:5432/os_db
@@ -151,9 +150,9 @@ services:
 
   # API Gateway
   api-gateway:
-    build:
-      context: .
+    image: ghcr.io/vladislavfvv/api-gateway:latest
     container_name: api-gateway
+    pull_policy: always
     restart: always
     environment:
       SPRING_PROFILES_ACTIVE: docker

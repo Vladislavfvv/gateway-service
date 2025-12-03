@@ -104,13 +104,11 @@ jobs:
       - name: Push Docker image
         if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
         run: |
-          IMAGE_NAME=ghcr.io/${{ github.repository }}/api-gateway
-          IMAGE_NAME=$(echo $IMAGE_NAME | tr '[:upper:]' '[:lower:]')
-          TAG=${{ github.sha }}
-          docker tag api-gateway:latest $IMAGE_NAME:latest
-          docker tag api-gateway:latest $IMAGE_NAME:$TAG
-          docker push $IMAGE_NAME:latest
-          docker push $IMAGE_NAME:$TAG
-          echo "Image pushed: $IMAGE_NAME:latest"
-          echo "Image pushed: $IMAGE_NAME:$TAG"
+          IMAGE_NAME=$(echo "${{ github.actor }}" | tr '[:upper:]' '[:lower:]')
+          docker tag api-gateway:latest ghcr.io/${IMAGE_NAME}/api-gateway:latest
+          docker tag api-gateway:latest ghcr.io/${IMAGE_NAME}/api-gateway:${{ github.sha }}
+          docker push ghcr.io/${IMAGE_NAME}/api-gateway:latest
+          docker push ghcr.io/${IMAGE_NAME}/api-gateway:${{ github.sha }}
+          echo "Image pushed: ghcr.io/${IMAGE_NAME}/api-gateway:latest"
+          echo "Image pushed: ghcr.io/${IMAGE_NAME}/api-gateway:${{ github.sha }}"
 

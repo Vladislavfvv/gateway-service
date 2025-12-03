@@ -160,13 +160,16 @@ services:
       # URL-адреса микросервисов (переопределяют значения из application.properties)
       SERVICES_AUTH_URL: http://authentication-service:8081
       SERVICES_USER_URL: http://user-service:8080
-      SERVICES_ORDER_URL: http://order-service:8083
+      # Важно: используем внутренний порт order-service (8080), а не внешний 8083
+      SERVICES_ORDER_URL: http://order-service:8080
       # JWT секретный ключ (должен совпадать с authentication-service)
       JWT_SECRET: mySecretKeyForJWTGenerationInAuthenticationService2025
       # Внутренний API ключ для rollback
       INTERNAL_API_KEY: dev-internal-api-key
     ports:
-      - "8084:8084"
+      # Внутри контейнера Gateway слушает на 8084 (server.port=8084),
+      # на хосте используем 9084, чтобы не конфликтовать с локальным запуском Spring Boot (8084)
+      - "9084:8084"
     networks:
       - backend-network
     depends_on:

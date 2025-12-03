@@ -178,9 +178,8 @@ services:
       # Внутренний API ключ для rollback
       INTERNAL_API_KEY: dev-internal-api-key
     ports:
-      # Внутри контейнера Gateway слушает на 8084 (server.port=8084),
-      # на хосте используем 9084, чтобы не конфликтовать с локальным запуском Spring Boot (8084)
-      - "9084:8084"
+      # Внутри контейнера Gateway слушает на 8084 (server.port=8084)
+      - "8084:8084"
     networks:
       - backend-network
     depends_on:

@@ -1,5 +1,4 @@
 # Маршрутизация для Spring Cloud Gateway (Docker профиль)
-# Используем переменные окружения напрямую (Spring Boot автоматически преобразует SERVICES_AUTH_URL в services.auth.url)
 spring:
   cloud:
     gateway:

@@ -106,7 +106,7 @@ services:
 
   # User Service
   user-service:
-    image: ghcr.io/vladislavfvv/userservice/user_service:latest
+    image: ghcr.io/vladislavfvv/user-service:latest
     build:
       context: ../../user-service/userService
       dockerfile: Dockerfile

@@ -33,6 +33,8 @@ public class SecurityConfig {
         http
                 .csrf(csrf -> csrf.disable())
                 .authorizeExchange(ex -> ex
+                        // Публичные эндпоинты Actuator - доступны без аутентификации для мониторинга
+                        .pathMatchers("/actuator/health", "/actuator/info").permitAll()
                         // Разрешаем доступ без JWT токена только для login и register
                         // Пути для проксирования к authentication-service
                         .pathMatchers("/auth/v1/login", "/auth/v1/register").permitAll()

@@ -1,22 +1,24 @@
-# Маршрутизация для Spring Cloud Gateway
+# Маршрутизация для Spring Cloud Gateway (Docker профиль)
+# Используем переменные окружения напрямую (Spring Boot автоматически преобразует SERVICES_AUTH_URL в services.auth.url)
 spring:
   cloud:
     gateway:
       routes:
         # Маршрут для authentication-service
         - id: auth_route
-          uri: ${services.auth.url:http://localhost:8081}
+          uri: http://authentication-service:8081
           predicates:
             - Path=/auth/**
 
         # Маршрут для user-service
         - id: user_route
-          uri: ${services.user.url:http://localhost:8080}
+          uri: http://user-service:8080
           predicates:
             - Path=/api/v1/users/**
 
         # Маршрут для order-service
         - id: order_route
-          uri: ${services.order.url:http://localhost:8080}
+          uri: http://order-service:8080
           predicates:
             - Path=/api/v1/orders/**
+

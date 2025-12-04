@@ -19,8 +19,17 @@ public class GatewayConfig implements GlobalFilter, Ordered {
     public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
         ServerHttpRequest request = exchange.getRequest();
         logger.info("Incoming request: {} {}", request.getMethod(), request.getURI());
-        logger.debug("Request headers: {}", request.getHeaders());
         
+        // Логируем наличие Authorization заголовка для отладки
+        String authHeader = request.getHeaders().getFirst("Authorization");
+        if (authHeader != null) {
+            logger.debug("Authorization header present: {}", authHeader.substring(0, Math.min(20, authHeader.length())) + "...");
+        } else {
+            logger.debug("No Authorization header in request");
+        }
+        
+        // Spring Cloud Gateway автоматически передает все заголовки, включая Authorization
+        // Но убеждаемся, что заголовок будет передан дальше
         return chain.filter(exchange).then(Mono.fromRunnable(() -> {
             logger.info("Response status: {}", exchange.getResponse().getStatusCode());
         }));

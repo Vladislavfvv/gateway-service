@@ -5,11 +5,13 @@ import com.example.demo.dto.RegisterRequest;
 import com.example.demo.dto.RegisterResponse;
 import com.example.demo.dto.TokenResponse;
 import com.example.demo.dto.UserDto;
+import com.example.demo.exception.DownstreamServiceException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
+import org.springframework.web.reactive.function.client.WebClientResponseException;
 import reactor.core.publisher.Mono;
 
 import java.util.HashMap;
@@ -46,20 +48,15 @@ public class GatewayRegistrationService {
      */
     public Mono<RegisterResponse> registerCredentials(RegisterRequest request) {
         log.info("Registering credentials for user: {}", request.getLogin());
-        // Создаем credentials в Authentication Service и возвращаем токен
+
         return createCredentialsInAuthService(request)
                 .map(tokenResponse -> {
                     log.info("Credentials registered successfully for user: {}. User should login to get tokens.",
                             request.getLogin());
                     return RegisterResponse.success(request.getLogin());
-                })
-                .onErrorResume(error -> {
-                    log.error("Failed to register credentials for user: {}", request.getLogin(), error);
-                    return Mono.error(new RuntimeException(
-                            "Registration failed: Could not create credentials. Error: " +
-                                    error.getMessage(), error));
                 });
     }
+
 
     /**
      * Создает профиль пользователя в User Service с поддержкой rollback.
@@ -112,11 +109,11 @@ public class GatewayRegistrationService {
 
         log.debug("Calling Authentication Service to create credentials: {}", authServiceBase + "/auth/v1/register");
 
-        return webClient.post()
+        WebClient.RequestHeadersSpec<?> requestSpec = webClient.post()
                 .uri(authServiceBase + "/auth/v1/register")
-                .bodyValue(authRequest) // Отправляем запрос на создание credentials в Authentication Service
-                .retrieve() // Получаем ответ от Authentication Service
-                .bodyToMono(TokenResponse.class) // Преобразуем ответ от Authentication Service в TokenResponse
+                .bodyValue(authRequest);
+
+        return forward(requestSpec, TokenResponse.class)
                 .doOnError(error -> log.error("Error calling Authentication Service: {}", error.getMessage()));
     }
 
@@ -131,14 +128,16 @@ public class GatewayRegistrationService {
 
         log.debug("Calling User Service to create user profile: {}", userServiceBase + "/api/v1/users/createUser");
 
-        return webClient.post()
+        WebClient.RequestHeadersSpec<?> requestSpec = webClient.post()
                 .uri(userServiceBase + "/api/v1/users/createUser")
-                .header("Authorization", "Bearer " + token) // Добавляем токен в заголовок запроса
-                .bodyValue(request) // Отправляем запрос на создание пользователя в User Service
-                .retrieve() // Получаем ответ от User Service
-                .bodyToMono(UserDto.class) // Преобразуем ответ от User Service в UserDto
+                .header("Authorization", "Bearer " + token)
+                .bodyValue(request);
+
+        return forward(requestSpec, UserDto.class)
                 .doOnError(error -> log.error("Error calling User Service: {}", error.getMessage()));
     }
+
+
 
     /**
      * Rollback: удаляет credentials из Authentication Service.
@@ -146,27 +145,36 @@ public class GatewayRegistrationService {
     private Mono<Void> rollbackAuthServiceCredentials(String email) {
         log.warn("Rolling back credentials for user: {}", email);
 
-        WebClient.RequestHeadersSpec<?> deleteRequest = webClient.delete() // Создаем запрос на удаление credentials из Authentication Service
-                .uri(authServiceBase + "/auth/v1/internal/sync/users/{email}", email); // Устанавливаем URI запроса
+        WebClient.RequestHeadersSpec<?> deleteRequest = webClient.delete()
+                .uri(authServiceBase + "/auth/v1/internal/sync/users/{email}", email);
 
         // Добавляем internal API key, если он настроен
-        if (internalApiKey != null && !internalApiKey.isBlank()) { // Если internal API key настроен
-            deleteRequest = deleteRequest.header("X-Internal-Api-Key", internalApiKey); // Добавляем internal API key в заголовок запроса
+        if (internalApiKey != null && !internalApiKey.isBlank()) {
+            deleteRequest = deleteRequest.header("X-Internal-Api-Key", internalApiKey);
         }
 
-        // Удаляем credentials из Authentication Service
-        return deleteRequest
-                .retrieve() // Отправляем запрос на удаление credentials из Authentication Service
-                .toBodilessEntity() // Удаляем credentials из Authentication Service
-                .then() // Возвращаем Mono<Void>
+        return forwardVoid(deleteRequest)
                 .doOnSuccess(v -> log.info("Successfully rolled back credentials for user: {}", email))
-                .doOnError(error -> log.error("Failed to rollback credentials for user: {}. Error: {}",
-                        email, error.getMessage()))
                 .onErrorResume(error -> {
                     // Логируем ошибку, но не прерываем цепочку
                     log.error("Rollback failed for user: {}, but continuing error propagation", email);
                     return Mono.empty();
                 });
+    }
+
+    private <T> Mono<T> forward(WebClient.RequestHeadersSpec<?> req, Class<T> bodyClass) {
+        return req.retrieve()
+                .bodyToMono(bodyClass)
+                .onErrorResume(WebClientResponseException.class,
+                        ex -> Mono.error(new DownstreamServiceException(ex)));
+    }
+
+    private Mono<Void> forwardVoid(WebClient.RequestHeadersSpec<?> req) {
+        return req.retrieve()
+                .toBodilessEntity()
+                .onErrorResume(WebClientResponseException.class,
+                        ex -> Mono.error(new DownstreamServiceException(ex)))
+                .then();
     }
 }
 

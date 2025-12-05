@@ -1,0 +1,34 @@
+# Маршрутизация для Spring Cloud Gateway
+spring:
+  cloud:
+    gateway:
+      routes:
+        # Маршрут для authentication-service
+        - id: auth_route
+          uri: ${services.auth.url:http://localhost:8081}
+          predicates:
+            - Path=/auth/**
+
+        # Маршрут для user-service (пользователи)
+        - id: user_route
+          uri: ${services.user.url:http://localhost:8080}
+          predicates:
+            - Path=/api/v1/users/**
+
+        # Маршрут для user-service (карты)
+        - id: cards_route
+          uri: ${services.user.url:http://localhost:8080}
+          predicates:
+            - Path=/api/v1/cards/**
+
+        # Маршрут для order-service (заказы)
+        - id: order_route
+          uri: ${services.order.url:http://localhost:8080}
+          predicates:
+            - Path=/api/v1/orders/**
+
+        # Маршрут для order-service (товары)
+        - id: items_route
+          uri: ${services.order.url:http://localhost:8080}
+          predicates:
+            - Path=/api/v1/items/**

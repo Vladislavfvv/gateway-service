@@ -1,0 +1,15 @@
+D:\JAVA\Innowise\Projects\28-11-2025\gateway-service\gateway-service\src\main\java\com\example\demo\config\GatewayConfig.java
+D:\JAVA\Innowise\Projects\28-11-2025\gateway-service\gateway-service\src\main\java\com\example\demo\config\SecurityConfig.java
+D:\JAVA\Innowise\Projects\28-11-2025\gateway-service\gateway-service\src\main\java\com\example\demo\config\WebClientConfig.java
+D:\JAVA\Innowise\Projects\28-11-2025\gateway-service\gateway-service\src\main\java\com\example\demo\controller\GatewayRegistrationController.java
+D:\JAVA\Innowise\Projects\28-11-2025\gateway-service\gateway-service\src\main\java\com\example\demo\DemoApplication.java
+D:\JAVA\Innowise\Projects\28-11-2025\gateway-service\gateway-service\src\main\java\com\example\demo\dto\CardInfoDto.java
+D:\JAVA\Innowise\Projects\28-11-2025\gateway-service\gateway-service\src\main\java\com\example\demo\dto\CreateUserFromTokenRequest.java
+D:\JAVA\Innowise\Projects\28-11-2025\gateway-service\gateway-service\src\main\java\com\example\demo\dto\RegisterRequest.java
+D:\JAVA\Innowise\Projects\28-11-2025\gateway-service\gateway-service\src\main\java\com\example\demo\dto\RegisterResponse.java
+D:\JAVA\Innowise\Projects\28-11-2025\gateway-service\gateway-service\src\main\java\com\example\demo\dto\TokenResponse.java
+D:\JAVA\Innowise\Projects\28-11-2025\gateway-service\gateway-service\src\main\java\com\example\demo\dto\UserDto.java
+D:\JAVA\Innowise\Projects\28-11-2025\gateway-service\gateway-service\src\main\java\com\example\demo\exception\DownstreamServiceException.java
+D:\JAVA\Innowise\Projects\28-11-2025\gateway-service\gateway-service\src\main\java\com\example\demo\exception\GatewayGlobalExceptionHandler.java
+D:\JAVA\Innowise\Projects\28-11-2025\gateway-service\gateway-service\src\main\java\com\example\demo\service\GatewayRegistrationService.java
+D:\JAVA\Innowise\Projects\28-11-2025\gateway-service\gateway-service\src\main\java\com\example\demo\service\JwtTokenService.java

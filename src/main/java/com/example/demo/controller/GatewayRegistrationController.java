@@ -18,14 +18,15 @@ import org.springframework.web.bind.annotation.RestController;
 import reactor.core.publisher.Mono;
 
 /**
- * Контроллер для кастомного flow регистрации пользователя.
- * Обрабатывает HTTP запросы и делегирует бизнес-логику в GatewayRegistrationService.
+ * Контроллер для регистрации пользователя с использованием Saga паттерна.
+ * Gateway выступает оркестратором распределенной транзакции.
  * 
- * Flow регистрации:
- * 1. Регистрация credentials в Authentication Service (POST /auth/v1/register) - только login, password, role
- * 2. Логин для получения токенов (POST /auth/v1/login) - проксируется к authentication-service
- * 3. Создание профиля пользователя в User Service (POST /auth/v1/createUser) - firstName, lastName, birthDate
- * С поддержкой rollback при ошибках на этапе создания профиля.
+ * Saga Flow регистрации (один эндпоинт /register):
+ * 1. Создание credentials в Authentication Service
+ * 2. Логин для получения токена (если указаны данные профиля)
+ * 3. Создание профиля в User Service (если указаны firstName, lastName, birthDate)
+ * 
+ * При ошибках выполняется компенсирующая транзакция (rollback).
  */
 @Slf4j
 @RestController
@@ -36,31 +37,41 @@ public class GatewayRegistrationController {
     private final GatewayRegistrationService registrationService;
 
     /**
-     * Шаг 1: Регистрация credentials в Authentication Service.
-     * Принимает только login, password, role.
-     * Создает credentials, но НЕ выдает токены.
-     * Токены выдаются при логине (POST /auth/v1/login).
+     * Единый эндпоинт для регистрации пользователя (Saga паттерн).
      * 
-     * @param request данные для регистрации (login, password, role)
-     * @return ResponseEntity с сообщением об успешной регистрации
+     * Если указаны только login, password, role - создаются только credentials.
+     * Если дополнительно указаны firstName, lastName, birthDate - выполняется полный цикл:
+     * создание credentials → логин → создание профиля.
+     * 
+     * При ошибках на любом этапе выполняется rollback (удаление credentials).
+     * 
+     * @param request данные для регистрации:
+     *                - обязательные: login, password
+     *                - опциональные: role (по умолчанию ROLE_USER)
+     *                - опциональные для автоматического создания профиля: firstName, lastName, birthDate
+     * @return ResponseEntity с результатом регистрации:
+     *         - если профиль не создавался: только сообщение
+     *         - если профиль создавался: данные пользователя и токены
      */
     @PostMapping("/register")
     public Mono<ResponseEntity<RegisterResponse>> register(@Valid @RequestBody RegisterRequest request) {
-        return registrationService.registerCredentials(request)
-                .map(response -> ResponseEntity.status(HttpStatus.CREATED).body(response));
+        boolean hasProfileData = request.getFirstName() != null && !request.getFirstName().isBlank() &&
+                request.getLastName() != null && !request.getLastName().isBlank() &&
+                request.getBirthDate() != null;
+        log.info("Received registration request for user: {} (profile data: {})", 
+                request.getLogin(), hasProfileData ? "provided" : "not provided");
+        
+        return registrationService.registerUser(request)
+                .map(response -> ResponseEntity.status(HttpStatus.CREATED).body(response))
+                .doOnError(error -> log.error("Registration failed for user: {}", request.getLogin(), error));
     }
 
     /**
-     * Шаг 3: Создание профиля пользователя в User Service.
-     * Использует JWT токен из заголовка Authorization для получения email.
-     * Токен должен быть получен через логин (POST /auth/v1/login).
-     * Принимает firstName, lastName, birthDate.
-     * Выполняет rollback (удаляет credentials), если создание профиля не удалось.
-     * 
-     * @param request данные для создания профиля (firstName, lastName, birthDate)
-     * @param authHeader заголовок Authorization с JWT токеном (Bearer <token>)
-     * @return ResponseEntity с данными созданного пользователя или ошибкой
+     * @deprecated Используйте /register с полными данными для автоматического создания профиля.
+     * Создание профиля пользователя в User Service (для обратной совместимости).
+     * Требует предварительной регистрации credentials и логина для получения токена.
      */
+    @Deprecated
     @PostMapping("/createUser")
     public Mono<ResponseEntity<UserDto>> createUser(
             @Valid @RequestBody CreateUserFromTokenRequest request,

@@ -42,65 +42,46 @@ public class GatewayRegistrationService {
     @Value("${internal.api.key:}")
     private String internalApiKey; // ключ для внутренних запросов 
 
-    /**
-     * Главный метод регистрации пользователя (Saga Orchestrator).
-     * Выполняет полный цикл регистрации с поддержкой rollback.
-     * 
-     * @param request данные для регистрации (credentials + опционально профиль)
-     * @return RegisterResponse с результатом регистрации
-     */
+
     public Mono<RegisterResponse> registerUser(RegisterRequest request) {
         log.info("Starting user registration: {}", request.getLogin());
         
-        // ========== ШАГ 1: Подготовка ==========
-        // Создаем Mono для credentials (это еще НЕ выполнение запроса, а только описание)
-        // Запрос выполнится только когда на Mono подпишутся (subscribe)
-        // 
-        // КТО ПОДПИСЫВАЕТСЯ?
-        // Spring WebFlux автоматически подписывается на Mono когда:
-        // 1. Контроллер возвращает Mono (см. GatewayRegistrationController.register)
-        // 2. Spring получает HTTP запрос и вызывает контроллер
-        // 3. Контроллер вызывает registrationService.registerUser(request)
-        // 4. Spring автоматически делает subscribe() на возвращаемом Mono
-        // 5. ТОЛЬКО ТОГДА выполняется запрос к auth-service
-        Mono<TokenResponse> credentials = createCredentialsInAuthService(request);
+        // ========== ПРОВЕРКА: Все данные профиля должны быть указаны ==========
+        // если нет полных данных профиля, регистрация отклоняется
+
+        java.util.List<String> missingFields = new java.util.ArrayList<>();
         
-        // ========== ПРОВЕРКА: Есть ли данные профиля? ==========
-        // Если данных профиля НЕТ - идем по короткому пути (только credentials)
-        if (request.getFirstName() == null || request.getFirstName().isBlank() ||
-            request.getLastName() == null || request.getLastName().isBlank() ||
-            request.getBirthDate() == null) {
-            
-            log.info("No profile data provided. Registration completed with credentials only.");
-            
-            // ========== ПЕРВЫЙ RETURN (строка ~80): Возвращаем только credentials ==========
-            // ВАЖНО: этот return означает ВЫХОД ИЗ МЕТОДА registerUser
-            // Код после этого if НЕ ВЫПОЛНИТСЯ, если условие true
-            // Преобразуем Mono<TokenResponse> в Mono<RegisterResponse>
-            // Возвращаем Mono<RegisterResponse> - это и есть результат метода registerUser
-            return credentials.map(token -> {
-                // ВАЖНО: этот return НЕ выходит из метода registerUser!
-                // Это return внутри lambda функции (map), который возвращает RegisterResponse
-                // Этот RegisterResponse будет обернут в Mono и вернется из метода registerUser
-                RegisterResponse response = new RegisterResponse();
-                response.setMessage("Credentials registered successfully. Please login to get tokens and create profile.");
-                response.setUser(null);
-                response.setTokens(null);
-                return response; // ← Возвращает RegisterResponse в map, а не из метода registerUser
-            })
-            .onErrorResume(error -> {
-                log.error("Error creating credentials for user {}: {}", request.getLogin(), error.getMessage());
-                return Mono.error(new RuntimeException("Registration error: " + error.getMessage(), error));
-            });
-            // КОНЕЦ МЕТОДА для случая "только credentials"
+        if (request.getFirstName() == null || request.getFirstName().isBlank()) {
+            missingFields.add("firstName");
+        }
+        if (request.getLastName() == null || request.getLastName().isBlank()) {
+            missingFields.add("lastName");
+        }
+        if (request.getBirthDate() == null) {
+            missingFields.add("birthDate");
         }
         
-        // ========== ЕСЛИ ДАННЫЕ ПРОФИЛЯ ЕСТЬ - ПРОДОЛЖАЕМ ==========
-        // Этот код выполнится ТОЛЬКО если условие if было false (есть данные профиля)
+        if (!missingFields.isEmpty()) {
+            String missingFieldsList = String.join(", ", missingFields);
+            String errorMessage = String.format(
+                    "Registration failed: Missing required profile data fields: %s. " +
+                    "Saga pattern requires complete data (firstName, lastName, birthDate) for both credentials and profile creation.",
+                    missingFieldsList);
+            
+            log.error("Registration rejected for user {}: missing profile data fields - {}", 
+                    request.getLogin(), missingFieldsList);
+            
+            // Mono.error() создает Mono с ошибкой, которая будет обработана Spring WebFlux
+            //ошибка будет передана клиенту через HTTP ответ
+            return Mono.error(new RuntimeException(errorMessage));
+        }
         
-        // Шаг 2: Логинимся для получения токена
-        // flatMap: после успешного создания credentials выполняем логин
-        // credentials содержит TokenResponse от регистрации, но нам нужен новый токен от логина
+        // ========== ШАГ 1: Создаем credentials в Authentication Service (сохранение в auth_db) ==========
+
+        Mono<TokenResponse> credentials = createCredentialsInAuthService(request);
+        
+        // ========== ШАГ 2: Логинимся для получения токена ==========
+        
         Mono<TokenResponse> loginTokens = credentials.flatMap(token -> loginUser(request.getLogin(), request.getPassword()))
                 // Обработка ошибки логина: если логин не удался - откатываем credentials
                 .onErrorResume(loginError -> {
@@ -110,9 +91,8 @@ public class GatewayRegistrationService {
                                     "Login failed. Credentials rolled back. " + loginError.getMessage(), loginError)));
                 });
         
-        // Шаг 3: Создаем профиль пользователя
-        // flatMap необходим потому что createUserProfileWithToken возвращает Mono<UserDto>
-        // Внутри flatMap используем map для преобразования UserDto в RegisterResponse
+        // ========== ШАГ 3: Создаем профиль пользователя в User Service (сохранение в us_db) ==========
+        
         Mono<RegisterResponse> registrationResponse = loginTokens.flatMap(tokens -> {
             String accessToken = tokens.getAccessToken();
             // createUserProfileWithToken возвращает Mono<UserDto>, поэтому нужен flatMap
@@ -137,9 +117,8 @@ public class GatewayRegistrationService {
         });
         
         // ========== ВТОРОЙ RETURN (строка ~135): Для случая "credentials + профиль" ==========
-        // Этот return выполнится ТОЛЬКО если условие if было false (есть данные профиля)
-        // Возвращаем результат полной регистрации (credentials + логин + профиль)
-        // Оба return (строка 79 и строка ~135) возвращают Mono<RegisterResponse>
+        //  выполнится ТОЛЬКО если условие if было false (есть данные профиля)
+        // Возвращаем результат полной регистрации (credentials + логин + профиль)       
         return registrationResponse;
     }
 
@@ -149,8 +128,6 @@ public class GatewayRegistrationService {
      * Создает credentials в Authentication Service.
      */
     private Mono<TokenResponse> createCredentialsInAuthService(RegisterRequest req) {
-        // Подготавливаем данные для auth-service (только login, password, role)
-        // Используем Map.of для создания неизменяемой карты (Java 9+)
         Map<String, Object> authRequest = Map.of(
             "login", req.getLogin(),
             "password", req.getPassword(),
@@ -232,16 +209,39 @@ public class GatewayRegistrationService {
             deleteRequest = deleteRequest.header("X-Internal-Api-Key", internalApiKey);
         }
 
-        // Выполняем DELETE запрос напрямую (forwardVoid инлайнен, так как используется только здесь)
-        return deleteRequest.retrieve()
+        // Выполняем DELETE запрос к auth-service для удаления credentials
+        // Это реактивная цепочка операций, которая выполнится только при подписке (subscribe)
+        return deleteRequest
+                // Шаг 1: retrieve() - выполняет HTTP запрос и получает ответ                
+                .retrieve()                
+                // Шаг 2: toBodilessEntity() - преобразует ответ в ResponseEntity без тела
+                // DELETE запрос обычно не возвращает тело, только статус код
+                // Возвращает Mono<ResponseEntity<Void>>
                 .toBodilessEntity()
+                
+                // Шаг 3: onErrorResume() - обрабатывает ошибки HTTP запроса
+                // Если auth-service вернул ошибку (404, 500 и т.д.) - ловим WebClientResponseException
+                // Преобразуем в DownstreamServiceException для единообразной обработки ошибок
                 .onErrorResume(WebClientResponseException.class,
                         ex -> Mono.error(new DownstreamServiceException(ex)))
+                
+                // Шаг 4: then() - игнорируем результат (ResponseEntity) и возвращаем Mono<Void>
+                // Нам не нужен ответ от auth-service, только факт выполнения запроса
+                // Преобразует Mono<ResponseEntity<Void>> в Mono<Void>
                 .then()
+                
+                // Шаг 5: doOnSuccess() - выполняется при успешном удалении credentials
+                // Это side-effect операция (логирование), не изменяет результат
+                // v - это Void (пустое значение), так как мы в Mono<Void>
                 .doOnSuccess(v -> log.info("Credentials successfully rolled back for user: {}", loginOrEmail))
+                
+                // Шаг 6: onErrorResume() - финальная обработка любых ошибок
+                // Если что-то пошло не так (даже после предыдущей обработки) - логируем и продолжаем
+                // Возвращаем Mono.empty() вместо ошибки, чтобы не прервать цепочку
+                // Это важно: даже если rollback не удался, мы не хотим прерывать обработку основной ошибки
                 .onErrorResume(error -> {
                     log.error("Error rolling back credentials for user: {}", loginOrEmail, error);
-                    return Mono.empty();
+                    return Mono.empty(); // Возвращаем пустой Mono вместо ошибки
                 });
     }
 
@@ -268,66 +268,15 @@ public class GatewayRegistrationService {
     }
 
     /**
-     * @deprecated Используйте registerUser() для полной регистрации с Saga паттерном.
-     * Создает профиль пользователя в User Service с поддержкой rollback.
-     */
-    @Deprecated
-    public Mono<UserDto> createUserProfile(CreateUserFromTokenRequest request, String authHeader) {
-        String token = jwtTokenService.extractTokenFromHeader(authHeader);
-        if (token == null) {
-            return Mono.error(new RuntimeException("Invalid Authorization header"));
-        }
-
-        String email = jwtTokenService.extractEmailFromToken(token);
-        if (email == null) {
-            return Mono.error(new RuntimeException("Could not extract email from token"));
-        }
-
-        log.info("Creating user profile for email: {}", email);
-
-        Mono<UserDto> result = createUserProfileInUserService(email, request, token)
-                .doOnSuccess(userDto -> log.info("User profile successfully created: {}", userDto.getEmail()));
-
-        result = result.onErrorResume(error -> {
-            log.error("Error creating profile for user {}. Performing rollback...", email, error);
-            String errorMessage = "Profile creation error. Credentials rolled back. " + error.getMessage();
-            return rollbackAuthServiceCredentials(email)
-                    .then(Mono.error(new RuntimeException(errorMessage, error)));
-        });
-
-        return result;
-    }
-
-    /**
-     * @deprecated Используется только в старом методе createUserProfile().
-     */
-    @Deprecated
-    private Mono<UserDto> createUserProfileInUserService(
-            String email,
-            CreateUserFromTokenRequest request,
-            String token) {
-
-        log.debug("Calling User Service to create user profile: {}", userServiceBase + "/api/v1/users/createUser");
-
-        WebClient.RequestHeadersSpec<?> requestSpec = webClient.post()
-                .uri(userServiceBase + "/api/v1/users/createUser")
-                .header("Authorization", "Bearer " + token)
-                .bodyValue(request);
-
-        return forward(requestSpec, UserDto.class)
-                .doOnError(error -> log.error("Error calling User Service: {}", error.getMessage()));
-    }
-
-    /**
      * Вспомогательный метод для выполнения HTTP запроса через WebClient.
      * Выполняет запрос и преобразует ответ в указанный тип.
      * 
-     * @param req подготовленный запрос (POST, GET, PUT, DELETE и т.д.)
-     * @param bodyClass класс для преобразования ответа (UserDto.class, TokenResponse.class и т.д.)
-     * @return Mono с результатом запроса
+     *  req подготовленный запрос (POST, GET, PUT, DELETE и т.д.)
+     *  bodyClass класс для преобразования ответа (UserDto.class, TokenResponse.class и т.д.)
+     * return Mono с результатом запроса
      */
     private <T> Mono<T> forward(WebClient.RequestHeadersSpec<?> req, Class<T> bodyClass) {
-        return req.retrieve()
+        return req.retrieve() //retrieve - это метод для выполнения запроса
                 .bodyToMono(bodyClass)
                 .onErrorResume(WebClientResponseException.class,
                         ex -> Mono.error(new DownstreamServiceException(ex)));

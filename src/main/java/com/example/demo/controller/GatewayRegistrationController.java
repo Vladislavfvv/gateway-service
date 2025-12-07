@@ -36,23 +36,6 @@ public class GatewayRegistrationController {
     
     private final GatewayRegistrationService registrationService;
 
-    /**
-     * Единый эндпоинт для регистрации пользователя (Saga паттерн).
-     * 
-     * Если указаны только login, password, role - создаются только credentials.
-     * Если дополнительно указаны firstName, lastName, birthDate - выполняется полный цикл:
-     * создание credentials → логин → создание профиля.
-     * 
-     * При ошибках на любом этапе выполняется rollback (удаление credentials).
-     * 
-     * @param request данные для регистрации:
-     *                - обязательные: login, password
-     *                - опциональные: role (по умолчанию ROLE_USER)
-     *                - опциональные для автоматического создания профиля: firstName, lastName, birthDate
-     * @return ResponseEntity с результатом регистрации:
-     *         - если профиль не создавался: только сообщение
-     *         - если профиль создавался: данные пользователя и токены
-     */
     @PostMapping("/register")
     public Mono<ResponseEntity<RegisterResponse>> register(@Valid @RequestBody RegisterRequest request) {
         boolean hasProfileData = request.getFirstName() != null && !request.getFirstName().isBlank() &&
@@ -63,21 +46,32 @@ public class GatewayRegistrationController {
         
         return registrationService.registerUser(request)
                 .map(response -> ResponseEntity.status(HttpStatus.CREATED).body(response))
-                .doOnError(error -> log.error("Registration failed for user: {}", request.getLogin(), error));
-    }
-
-    /**
-     * @deprecated Используйте /register с полными данными для автоматического создания профиля.
-     * Создание профиля пользователя в User Service (для обратной совместимости).
-     * Требует предварительной регистрации credentials и логина для получения токена.
-     */
-    @Deprecated
-    @PostMapping("/createUser")
-    public Mono<ResponseEntity<UserDto>> createUser(
-            @Valid @RequestBody CreateUserFromTokenRequest request,
-            @RequestHeader("Authorization") String authHeader) {
-        
-        return registrationService.createUserProfile(request, authHeader)
-                .map(userDto -> ResponseEntity.status(HttpStatus.CREATED).body(userDto));
+                .onErrorResume(error -> {
+                    log.error("Registration failed for user: {}", request.getLogin(), error);
+                    
+                    // Определяем HTTP статус на основе типа ошибки
+                    HttpStatus status;
+                    String errorMessage = error.getMessage() != null ? error.getMessage() : "Unknown error";
+                    
+                    if (errorMessage.contains("Missing required profile data")) {
+                        // Ошибка валидации - отсутствуют обязательные поля
+                        status = HttpStatus.BAD_REQUEST;
+                    } else if (errorMessage.contains("Registration error") || 
+                               errorMessage.contains("Credentials rolled back")) {
+                        // Ошибка при регистрации с rollback
+                        status = HttpStatus.INTERNAL_SERVER_ERROR;
+                    } else {
+                        // Другие ошибки
+                        status = HttpStatus.INTERNAL_SERVER_ERROR;
+                    }
+                    
+                    // Возвращаем понятное сообщение об ошибке клиенту
+                    RegisterResponse errorResponse = new RegisterResponse();
+                    errorResponse.setMessage(errorMessage);
+                    errorResponse.setUser(null);
+                    errorResponse.setTokens(null);
+                    
+                    return Mono.just(ResponseEntity.status(status).body(errorResponse));
+                });
     }
 }

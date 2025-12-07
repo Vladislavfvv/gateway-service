@@ -1,4 +1,12 @@
 # Маршрутизация для Spring Cloud Gateway
+# Используются переменные окружения для гибкой настройки URL сервисов
+# Spring автоматически преобразует переменные окружения:
+#   SERVICES_AUTH_URL -> services.auth.url
+#   SERVICES_USER_URL -> services.user.url
+#   SERVICES_ORDER_URL -> services.order.url
+# 
+# Для локальной разработки: дефолтные значения (localhost) из application.properties
+# Для Docker: переменные задаются в docker-compose.yml и переопределяют дефолты
 spring:
   cloud:
     gateway:

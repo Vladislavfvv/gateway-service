@@ -140,18 +140,38 @@ curl -X POST http://localhost:8084/auth/v1/register \
   -d '{
     "login": "test@example.com",
     "password": "password123",
-    "role": "ROLE_USER"
+    "role": "ROLE_USER",    
+    "firstName": "Ivan",
+    "lastName": "Ivanov",
+    "birthDate": "1990-01-01"
   }'
 ```
 
 **Ожидаемый ответ:**
 ```json
-{
-  "message": "User registered successfully. Please login to get tokens."
+{ 
+    "message": "User registered successfully with profile. Tokens included.",
+    "user": {
+        "id": 2,
+        "firstName": "Ivan",
+        "lastName": "Ivanov",
+        "email": "test@example.com",
+        "birthDate": "1990-01-01",
+        "cards": []
+    },
+    "tokens": {
+        "accessToken": "eyJhbGci...",
+        "refreshToken": "eyJhbGc...",
+        "type": "Bearer",
+        "expiresIn": 900000
+    }
 }
 ```
+**Сохраните `accessToken` для следующих шагов!**
 
-### 6.2. Логин для получения токена
+
+### 6.2. Пользователь уже залогинен, поэтому следующий шаг можно пропустить. 
+Если уже истекло время токена(15 минут), то логинимся для получения токена
 
 ```bash
 curl -X POST http://localhost:8084/auth/v1/login \
@@ -174,33 +194,9 @@ curl -X POST http://localhost:8084/auth/v1/login \
 
 **Сохраните `accessToken` для следующих шагов!**
 
-### 6.3. Создание профиля пользователя
 
-```bash
-# Замените YOUR_TOKEN на токен из предыдущего шага
-curl -X POST http://localhost:8084/auth/v1/createUser \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer YOUR_TOKEN" \
-  -d '{
-    "firstName": "Ivan",
-    "lastName": "Ivanov",
-    "birthDate": "1920-01-01"
-  }'
-```
 
-**Ожидаемый ответ:**
-```json
-{
-  "id": 1,
-  "email": "test@example.com",
-  "firstName": "Ivan",
-  "lastName": "Ivanov",
-  "birthDate": "1920-01-01",
-  "cards": []
-}
-```
-
-### 6.4 Просмотреть информацио о пользователе и его картах
+### 6.3 Просмотреть информацио о пользователе и его картах
 # Замените YOUR_TOKEN на токен из предыдущего шага 
 ```bash
 Auth-> Auth Type: Bearer Token Например: Ваш_токен!!!):
@@ -233,7 +229,7 @@ Auth-> Auth Type: Bearer Token Например: Ваш_токен!!!):
         Выведет результат: в виде json карты пользователя
 ```
 
-    8)  Работа с заказами(пользователь работает только со своими заказами)
+    6.4)  Работа с заказами(пользователь работает только со своими заказами)
 
     - Создать заказ:
 ```bash
@@ -251,7 +247,7 @@ Auth-> Auth Type: Bearer Token Например: Ваш_токен!!!):
         ]
     }
 ```
-    8.1 Просмотреть товары 
+    6.5 Просмотреть товары 
 ```bash
     GET http://localhost:8084/api/v1/items
     Authorization: Bearer eyJhbGciOiJIUzI1NiJ9...
@@ -271,13 +267,13 @@ Auth-> Auth Type: Bearer Token Например: Ваш_токен!!!):
     ]
 ```
 
-    8.2 Получить свои заказы 
+    6.6 Получить свои заказы 
 ```bash
     `GET http://localhost:8084/api/v1/orders/my`
     Authorization: Bearer eyJhbGciOiJIUzI1NiJ9...
 ``` 
 
-    8.3 Получить заказ по ID
+    6.7 Получить заказ по ID
 ```bash
     GET GET http://localhost:8084/api/v1/orders/{id}
 ```
@@ -320,14 +316,14 @@ Auth-> Auth Type: Bearer Token Например: Ваш_токен!!!):
     }
     ]
 ```
-    8.4 Получить товары по IDs
+    6.8 Получить заказы по IDs
 ```bash
     http://localhost:8084/api/v1/orders/ids?ids=2&ids=3
     Authorization: Bearer {ваш_JWT_токен}
     Ответ: выведутся все заказы пользователя
 ```
 
-    8.5 Получить заказы по статусам
+    6.9 Получить заказы по статусам
 ```bash
     GET http://localhost:8084/api/v1/orders/statuses
     **Доступные статусы:** `NEW`, `PROCESSING`, `COMPLETED`, `CANCELLED`
@@ -345,7 +341,7 @@ Auth-> Auth Type: Bearer Token Например: Ваш_токен!!!):
     Authorization: Bearer {ваш_JWT_токен}
     ```
 
-    8.6 Обновить статус заказа:
+    6.10 Обновить статус заказа:
     Пример:
 ```bash
     PUT http://localhost:8084/api/v1/orders/2
@@ -386,9 +382,9 @@ Auth-> Auth Type: Bearer Token Например: Ваш_токен!!!):
     ]
 ```
 
-### 9. Roadmap работы программы **ROLE_ADMIN**:
+### 7. Roadmap работы программы **ROLE_ADMIN**:
 
-    9.1 Авторизоваться через 
+    7.1 Авторизоваться через 
 ```bash
     `POST http://localhost:8084/auth/v1/login`:
     Content-Type: application/json
@@ -399,19 +395,19 @@ Auth-> Auth Type: Bearer Token Например: Ваш_токен!!!):
 ```   
     **Ожидаемый результат**: JSON с `accessToken` и `refreshToken`
 
-    9.2 Копируем полученный токен из поля access_token:
+    7.2 Копируем полученный токен из поля access_token:
     Например: Ваш_токен  
 
-    9.3 Далее варианты(не забываем в каждом запросе постоянно вставлять Auth-> Auth Type: Bearer Token Например: Ваш_токен!!!):
+    7.3 Далее варианты(не забываем в каждом запросе постоянно вставлять Auth-> Auth Type: Bearer Token Например: Ваш_токен!!!):
     ROLE_ADMIN предоставлен широкий спектр возможностей:
 
-    9.4 посмотреть всех юзеров пагинация:
+    7.4 посмотреть всех юзеров пагинация:
     GET http://localhost:8084/api/v1/users?page=4&size=5
 
-    9.5 посмотреть все карты пагинация:
+    7.5 посмотреть все карты пагинация:
     GET http://localhost:8084/api/v1/cards?page=4&size=10
 
-    9.6 редактирование пользователя
+    7.6 редактирование пользователя
     PUT http://localhost:8084/api/v1/users/30
     Например:
     raw: x-www-form-urlencoded
@@ -434,17 +430,17 @@ Auth-> Auth Type: Bearer Token Например: Ваш_токен!!!):
       ]
     }
 
-    9.7 Удаление пользователя:
+    7.7 Удаление пользователя:
     DELETE http://localhost:8084/api/v1/users/28
 
-    9.8 Создать товар:
+    7.8 Создать товар:
     POST http://localhost:8084/api/v1/items
      Body: { 
             "name": "Keyboard", 
             "price": 75.00 
         }
 
-    9.9 Редактировать товар:
+    7.9 Редактировать товар:
     PUT http://localhost:8084/api/v1/items/1
     Authorization: Bearer {ADMIN_TOKEN}
     Content-Type: application/json
@@ -453,7 +449,7 @@ Auth-> Auth Type: Bearer Token Например: Ваш_токен!!!):
         "price": 650.00
     }
 
-     9.10 Редактировать статус заказа:
+     7.10 Редактировать статус заказа:
     PUT http://localhost:8084/api/v1/orders/2
     Authorization: Bearer {ADMIN_TOKEN}
     Content-Type: application/json
@@ -461,17 +457,17 @@ Auth-> Auth Type: Bearer Token Например: Ваш_токен!!!):
        "status": "PROCESSING"
     }  
 
-    9.11 Удалить товар:
+    7.11 Удалить товар:
     DELETE http://localhost:8084/api/v1/items/1
     Authorization: Bearer {ADMIN_TOKEN}
 
-    9.12 Получить все заказы:
+    7.12 Получить все заказы:
     http://localhost:8084/api/v1/orders
 
-    9.13 Получить заказы по статусам:
+    7.13 Получить заказы по статусам:
     GET http://localhost:8084/api/v1/orders/statuses?statuses=NEW&statuses=PROCESSING
 
-    9.14 Удалить заказ:
+    7.14 Удалить заказ:
     DELETE http://localhost:8084/api/v1/orders/1
 
 

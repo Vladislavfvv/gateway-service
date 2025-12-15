@@ -82,6 +82,71 @@ services:
       timeout: 5s
       retries: 5
 
+  # MongoDB для payment-service
+  mongo-payment:
+    image: mongo:6
+    container_name: mongo-payment
+    restart: always
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_payment_data:/data/db
+    networks:
+      - backend-network
+    healthcheck:
+      test: ["CMD-SHELL", "mongosh --eval 'db.adminCommand(\"ping\")' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  # Zookeeper для Kafka
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    container_name: zookeeper
+    restart: always
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    ports:
+      - "2181:2181"
+    networks:
+      - backend-network
+    healthcheck:
+      test: ["CMD-SHELL", "echo ruok | nc localhost 2181 | grep imok"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # Kafka для межсервисного взаимодействия
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: kafka
+    restart: always
+    depends_on:
+      zookeeper:
+        condition: service_healthy
+    ports:
+      - "9092:9092"
+      - "9093:9093"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092,PLAINTEXT_INTERNAL://kafka:9093
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_INTERNAL:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT_INTERNAL
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+    networks:
+      - backend-network
+    healthcheck:
+      test: ["CMD-SHELL", "kafka-broker-api-versions --bootstrap-server localhost:9093 || exit 1"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
+
   # Authentication Service
   authentication-service:
     image: ghcr.io/vladislavfvv/authentication-service:latest
@@ -102,6 +167,8 @@ services:
       - backend-network
     depends_on:
       postgres-auth:
+        condition: service_healthy
+      kafka:
         condition: service_healthy
 
   # User Service
@@ -131,6 +198,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      kafka:
+        condition: service_healthy
 
   # Order Service
   order-service:
@@ -147,6 +216,7 @@ services:
       SPRING_DATASOURCE_PASSWORD: postgres
       SPRING_PROFILES_ACTIVE: docker
       USER_SERVICE_URL: http://user-service:8080
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9093
     ports:
       - "8083:8080"
     networks:
@@ -156,6 +226,33 @@ services:
         condition: service_healthy
       user-service:
         condition: service_started
+      kafka:
+        condition: service_healthy
+
+  # Payment Service
+  payment-service:
+    image: ghcr.io/vladislavfvv/payment-service:latest
+    build:
+      context: ../../payment-service/paymentservice
+      dockerfile: Dockerfile
+    container_name: payment-service
+    pull_policy: if_not_present
+    restart: always
+    environment:
+      SPRING_DATA_MONGODB_URI: mongodb://mongo-payment:27017/paymentdb
+      SPRING_LIQUIBASE_CHANGE_LOG: classpath:/db/changelog/master-changelog.yaml
+      SPRING_LIQUIBASE_ENABLED: "true"
+      SPRING_PROFILES_ACTIVE: docker
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9093
+    ports:
+      - "8085:8080"
+    networks:
+      - backend-network
+    depends_on:
+      mongo-payment:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
 
   # API Gateway
   api-gateway:
@@ -191,12 +288,15 @@ services:
         condition: service_started
       redis:
         condition: service_healthy
+      kafka:
+        condition: service_healthy
 
 volumes:
   auth_db_data:
   us_db_data:
   os_db_data:
   redis_data:
+  mongo_payment_data:
 
 networks:
   backend-network:

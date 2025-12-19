@@ -4,6 +4,7 @@
 #   SERVICES_AUTH_URL -> services.auth.url
 #   SERVICES_USER_URL -> services.user.url
 #   SERVICES_ORDER_URL -> services.order.url
+#   SERVICES_PAYMENT_URL -> services.payment.url
 # 
 # Для локальной разработки: дефолтные значения (localhost) из application.properties
 # Для Docker: переменные задаются в docker-compose.yml и переопределяют дефолты
@@ -40,3 +41,9 @@ spring:
           uri: ${services.order.url:http://localhost:8080}
           predicates:
             - Path=/api/v1/items/**
+
+        # Маршрут для payment-service
+        - id: payment_route
+          uri: ${services.payment.url:http://localhost:8085}
+          predicates:
+            - Path=/api/v1/payments/**

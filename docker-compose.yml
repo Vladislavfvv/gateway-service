@@ -231,7 +231,7 @@ services:
 
   # Payment Service
   payment-service:
-    image: ghcr.io/vladislavfvv/payment-service:latest
+    image: payment-service:latest
     build:
       context: ../../payment-service/paymentservice
       dockerfile: Dockerfile
@@ -244,8 +244,9 @@ services:
       SPRING_LIQUIBASE_ENABLED: "true"
       SPRING_PROFILES_ACTIVE: docker
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9093
+      SERVER_PORT: 8085
     ports:
-      - "8085:8080"
+      - "8085:8085"
     networks:
       - backend-network
     depends_on:
@@ -270,8 +271,8 @@ services:
       SERVICES_USER_URL: http://user-service:8080
       # Важно: используем внутренний порт order-service (8080), а не внешний 8083
       SERVICES_ORDER_URL: http://order-service:8080
-      # Payment Service URL (внутренний порт 8080)
-      SERVICES_PAYMENT_URL: http://payment-service:8080
+      # Payment Service URL (внутренний порт 8085)
+      SERVICES_PAYMENT_URL: http://payment-service:8085
       # JWT секретный ключ (должен совпадать с authentication-service)
       JWT_SECRET: mySecretKeyForJWTGenerationInAuthenticationService2025
       # Внутренний API ключ для rollback

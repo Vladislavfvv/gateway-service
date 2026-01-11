@@ -1,49 +1,62 @@
-# Маршрутизация для Spring Cloud Gateway
-# Используются переменные окружения для гибкой настройки URL сервисов
-# Spring автоматически преобразует переменные окружения:
+# Spring Cloud Gateway routing configuration
+# Uses environment variables for flexible service URL configuration
+# Spring automatically transforms environment variables:
 #   SERVICES_AUTH_URL -> services.auth.url
 #   SERVICES_USER_URL -> services.user.url
 #   SERVICES_ORDER_URL -> services.order.url
 #   SERVICES_PAYMENT_URL -> services.payment.url
 # 
-# Для локальной разработки: дефолтные значения (localhost) из application.properties
-# Для Docker: переменные задаются в docker-compose.yml и переопределяют дефолты
+# For local development: default values (localhost) from application.properties
+# For Docker: variables are set in docker-compose.yml and override defaults
 spring:
   cloud:
     gateway:
+      httpclient:
+        connect-timeout: 5000
+        response-timeout: 10s
+        pool:
+          max-connections: 200
+          max-idle-time: 30s
       routes:
-        # Маршрут для authentication-service
+        # Route for authentication-service
         - id: auth_route
           uri: ${services.auth.url:http://localhost:8081}
           predicates:
             - Path=/auth/**
 
-        # Маршрут для user-service (пользователи)
+        # Route for user-service (users)
         - id: user_route
           uri: ${services.user.url:http://localhost:8080}
           predicates:
             - Path=/api/v1/users/**
 
-        # Маршрут для user-service (карты)
+        # Route for user-service (cards)
         - id: cards_route
           uri: ${services.user.url:http://localhost:8080}
           predicates:
             - Path=/api/v1/cards/**
 
-        # Маршрут для order-service (заказы)
+        # Route for order-service (orders)
         - id: order_route
           uri: ${services.order.url:http://localhost:8080}
           predicates:
             - Path=/api/v1/orders/**
 
-        # Маршрут для order-service (товары)
+        # Route for order-service (items)
         - id: items_route
           uri: ${services.order.url:http://localhost:8080}
           predicates:
             - Path=/api/v1/items/**
 
-        # Маршрут для payment-service
+        # Route for payment-service
+        # Using two patterns: one for root path, another for nested
         - id: payment_route
           uri: ${services.payment.url:http://localhost:8085}
           predicates:
-            - Path=/api/v1/payments/**
+            - Path=/api/v1/payments,/api/v1/payments/**
+          filters:
+            - name: Retry
+              args:
+                retries: 1
+                statuses: BAD_GATEWAY,GATEWAY_TIMEOUT,INTERNAL_SERVER_ERROR
+                methods: GET

@@ -619,6 +619,34 @@ docker system prune -a
 
 
 Для обычных пользователей:
-PUT http://localhost:8082/api/v1/users/meAuthorization: Bearer <token>{  "firstName": "John",  "lastName": "Doe",  "birthDate": "1990-01-01"}
+PUT http://localhost:8082/api/v1/users/meAuthorization: Bearer <token>{  "firstName": "Ivan",  "lastName": "Romanoff",  "birthDate": "1990-01-01"}
 Для админов (обновление любого пользователя):
-PUT http://localhost:8082/api/v1/users/2Authorization: Bearer <admin_token>{  "firstName": "Jane",  "lastName": "Smith"}
+PUT http://localhost:8082/api/v1/users/2Authorization: Bearer <admin_token>{  "firstName": "Roma",  "lastName": "Smirnoff"}
+
+
+
+
+
+# 1. Сборка Maven
+mvn clean package -DskipTests
+# 2. Сборка Docker образа
+docker build --no-cache -t gateway-service:latest .
+Остановить контейнеры
+minikube ssh "docker ps -a | grep payment-service"
+# 3. Удаление старых образов из Minikube
+minikube image rm gateway-service:latest
+minikube ssh "docker rmi gateway-service:latest -f"
+# 4. Загрузка нового образа (используем метод через tar для надежности)
+$tempTar = "$env:TEMP\gateway-service.tar"
+docker save gateway-service:latest -o $tempTar
+minikube cp $tempTar /tmp/gateway-service-image.tar
+minikube ssh "docker load -i /tmp/gateway-service-image.tar && rm /tmp/gateway-service-image.tar"
+Remove-Item $tempTar
+# 5. Перезапуск deployment
+kubectl rollout restart deployment/gateway-service -n microservices
+kubectl delete pods -n microservices -l app=gateway-service --force --grace-period=0
+# 6. Проверка статуса
+kubectl get pods -n microservices -l app=gateway-service
+После развертывания проверьте логи:
+kubectl logs -f -n microservices deployment/gateway-service
+После перезапуска Gateway с новой конфигурацией CORS регистрация из React-приложения должна работать.

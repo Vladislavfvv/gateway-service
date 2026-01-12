@@ -62,6 +62,54 @@ public class CorsConfig {
     }
     
     /**
+     * Фильтр для обработки OPTIONS (preflight) запросов ДО SecurityConfig и маршрутизации Gateway.
+     * Это гарантирует, что preflight запросы обрабатываются правильно и возвращают CORS заголовки
+     * до того, как Spring Security проверит авторизацию или Gateway попытается маршрутизировать запрос.
+     * Order = HIGHEST_PRECEDENCE - 10 (выше чем SecurityConfig и Gateway маршрутизация)
+     */
+    @Bean
+    @Order(Ordered.HIGHEST_PRECEDENCE - 10)
+    public WebFilter corsPreflightFilter() {
+        return (ServerWebExchange exchange, WebFilterChain chain) -> {
+            var request = exchange.getRequest();
+            
+            // Если это OPTIONS запрос (preflight), обрабатываем его здесь
+            if (request.getMethod() == org.springframework.http.HttpMethod.OPTIONS) {
+                String origin = request.getHeaders().getFirst("Origin");
+                String requestMethod = request.getHeaders().getFirst("Access-Control-Request-Method");
+                String requestHeaders = request.getHeaders().getFirst("Access-Control-Request-Headers");
+                
+                logger.debug("OPTIONS preflight request detected. Origin: {}, Method: {}, Headers: {}", 
+                    origin, requestMethod, requestHeaders);
+                
+                // Проверяем, что Origin разрешен
+                if (origin != null && (origin.contains("localhost:3000") || origin.contains("127.0.0.1:3000"))) {
+                    var response = exchange.getResponse();
+                    var headers = response.getHeaders();
+                    
+                    // Устанавливаем CORS заголовки для preflight ответа
+                    headers.add("Access-Control-Allow-Origin", origin);
+                    headers.add("Access-Control-Allow-Credentials", "true");
+                    headers.add("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS, PATCH");
+                    headers.add("Access-Control-Allow-Headers", requestHeaders != null ? requestHeaders : "*");
+                    headers.add("Access-Control-Max-Age", "3600");
+                    
+                    // Возвращаем 200 OK для preflight запроса
+                    response.setStatusCode(org.springframework.http.HttpStatus.OK);
+                    
+                    logger.debug("Handled OPTIONS preflight request for origin: {}. Response headers set.", origin);
+                    
+                    return response.setComplete();
+                } else {
+                    logger.debug("OPTIONS request with unallowed origin: {}", origin);
+                }
+            }
+            
+            return chain.filter(exchange);
+        };
+    }
+    
+    /**
      * Дополнительный фильтр для гарантированного добавления CORS заголовков ко всем ответам
      * Выполняется после CorsWebFilter, чтобы убедиться, что заголовки присутствуют
      * Использует ServerHttpResponseDecorator для гарантированного добавления заголовков

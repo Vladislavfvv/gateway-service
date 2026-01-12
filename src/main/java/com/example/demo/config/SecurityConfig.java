@@ -33,6 +33,8 @@ public class SecurityConfig {
     public SecurityWebFilterChain securityWebFilterChain(ServerHttpSecurity http) {
         http
                 .csrf(csrf -> csrf.disable())
+                // CORS обрабатывается через CorsWebFilter и corsPreflightFilter в CorsConfig
+                // Не используем .cors() здесь, так как это может конфликтовать с CorsWebFilter
                 .authorizeExchange(ex -> ex
                         // Разрешаем OPTIONS запросы (CORS preflight) без аутентификации - ДОЛЖНО БЫТЬ ПЕРВЫМ
                         // Используем оба варианта для надежности

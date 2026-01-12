@@ -22,9 +22,9 @@ public class GatewayConfig implements GlobalFilter, Ordered {
         String path = request.getURI().getPath();
         String method = request.getMethod().toString();
         
-        logger.info("=== GATEWAY REQUEST ===");
-        logger.info("Method: {}, Path: {}", method, path);
-        logger.info("Full URI: {}", request.getURI());
+        logger.debug("=== GATEWAY REQUEST ===");
+        logger.debug("Method: {}, Path: {}", method, path);
+        logger.debug("Full URI: {}", request.getURI());
         
         String origin = request.getHeaders().getFirst(HttpHeaders.ORIGIN);
         if (origin != null) {
@@ -40,42 +40,27 @@ public class GatewayConfig implements GlobalFilter, Ordered {
         
         long startTime = System.currentTimeMillis();
         
-        // Оборачиваем ответ для гарантированного добавления CORS заголовков
-        var originalResponse = exchange.getResponse();
-        var decoratedResponse = new org.springframework.http.server.reactive.ServerHttpResponseDecorator(originalResponse) {
-            @Override
-            public org.springframework.http.HttpHeaders getHeaders() {
-                var headers = super.getHeaders();
-                
-                // Добавляем CORS заголовки, если Origin присутствует и это localhost:3000
-                if (origin != null && (origin.contains("localhost:3000") || origin.contains("127.0.0.1:3000"))) {
-                    if (!headers.containsKey("Access-Control-Allow-Origin")) {
-                        logger.debug("Adding Access-Control-Allow-Origin: {}", origin);
-                        headers.add("Access-Control-Allow-Origin", origin);
-                    }
-                    if (!headers.containsKey("Access-Control-Allow-Credentials")) {
-                        headers.add("Access-Control-Allow-Credentials", "true");
-                    }
-                    if (!headers.containsKey("Access-Control-Allow-Methods")) {
-                        headers.add("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS, PATCH");
-                    }
-                    if (!headers.containsKey("Access-Control-Allow-Headers")) {
-                        headers.add("Access-Control-Allow-Headers", "*");
-                    }
-                }
-                
-                return headers;
-            }
-        };
+        // CORS заголовки обрабатываются через CorsWebFilter и corsPreflightFilter
+        // GatewayConfig выполняется после CORS фильтров, поэтому не добавляем заголовки здесь
+        // чтобы не конфликтовать с CorsWebFilter
         
-        return chain.filter(exchange.mutate().response(decoratedResponse).build())
+        return chain.filter(exchange)
             .doOnSuccess(result -> {
                 long duration = System.currentTimeMillis() - startTime;
-                logger.info("=== GATEWAY RESPONSE ===");
-                logger.info("Path: {}, Status: {}, Duration: {}ms", 
-                    path, 
-                    exchange.getResponse().getStatusCode(),
-                    duration);
+                // Логируем только медленные запросы (>1 секунды) или ошибки
+                if (duration > 1000) {
+                    logger.warn("=== GATEWAY RESPONSE (SLOW) ===");
+                    logger.warn("Path: {}, Status: {}, Duration: {}ms", 
+                        path, 
+                        exchange.getResponse().getStatusCode(),
+                        duration);
+                } else {
+                    logger.debug("=== GATEWAY RESPONSE ===");
+                    logger.debug("Path: {}, Status: {}, Duration: {}ms", 
+                        path, 
+                        exchange.getResponse().getStatusCode(),
+                        duration);
+                }
             })
         
             .doOnError(error -> {
